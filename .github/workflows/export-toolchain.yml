@@ -1,0 +1,115 @@
+name: Export Godot Android Toolchain
+
+on:
+  push:
+    paths:
+      - ".github/workflows/export-toolchain.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android command line tools
+        uses: android-actions/setup-android@v4
+
+      - name: Install exact Android SDK required by Godot
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          yes | sdkmanager --licenses >/dev/null || true
+
+          sdkmanager \
+            "cmdline-tools;latest" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.1" \
+            "cmake;3.10.2.4988404" \
+            "ndk;28.1.13356709"
+
+          sdkmanager --list_installed > toolchain-manifest.txt
+
+      - name: Package Android SDK
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          tar -C "$ANDROID_HOME" -cf android-sdk-godot.tar \
+            cmdline-tools/latest \
+            platform-tools \
+            platforms/android-35 \
+            build-tools/35.0.1 \
+            cmake/3.10.2.4988404 \
+            ndk/28.1.13356709 \
+            licenses
+
+          sha256sum android-sdk-godot.tar >> toolchain-manifest.txt
+          du -h android-sdk-godot.tar >> toolchain-manifest.txt
+
+      - name: Download Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          curl -L --fail --retry 3 \
+            -o Godot_v4.7.2-stable_linux.x86_64.zip \
+            https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+
+          echo \
+            "cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4  Godot_v4.7.2-stable_linux.x86_64.zip" \
+            | sha256sum -c -
+
+      - name: Download Godot 4.7.2 export templates
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          curl -L --fail --retry 3 \
+            -o Godot_v4.7.2-stable_export_templates.tpz \
+            https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz
+
+          echo \
+            "f298490b8d44d934be425a5a65a51bf15f422428b229a06a6e11d9ffea248011  Godot_v4.7.2-stable_export_templates.tpz" \
+            | sha256sum -c -
+
+      - name: Upload Android SDK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-sdk-godot
+          path: android-sdk-godot.tar
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload Godot
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-4.7.2-linux
+          path: Godot_v4.7.2-stable_linux.x86_64.zip
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload export templates
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-4.7.2-templates
+          path: Godot_v4.7.2-stable_export_templates.tpz
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: toolchain-manifest
+          path: toolchain-manifest.txt
+          retention-days: 7
