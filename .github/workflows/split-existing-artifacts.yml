@@ -1,0 +1,79 @@
+name: Split Existing Toolchain Artifacts
+
+on:
+  push:
+    paths:
+      - ".github/workflows/split-existing-artifacts.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  split:
+    runs-on: ubuntu-24.04
+    env:
+      SOURCE_RUN_ID: "33793566149"
+
+    steps:
+      - name: Download original artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          mkdir -p source chunks
+          gh run download "$SOURCE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            -n android-sdk-godot \
+            -n godot-4.7.2-templates \
+            --dir source
+
+          SDK_FILE="$(find source -type f -name 'android-sdk-godot.tar' -print -quit)"
+          TEMPLATE_FILE="$(find source -type f -name 'Godot_v4.7.2-stable_export_templates.tpz' -print -quit)"
+          test -s "$SDK_FILE"
+          test -s "$TEMPLATE_FILE"
+
+          split -b 350M -d -a 2 "$SDK_FILE" chunks/sdk.part-
+          split -b 350M -d -a 2 "$TEMPLATE_FILE" chunks/templates.part-
+
+          sha256sum "$SDK_FILE" "$TEMPLATE_FILE" chunks/* > chunks/chunk-manifest.sha256
+          wc -c "$SDK_FILE" "$TEMPLATE_FILE" chunks/* > chunks/chunk-sizes.txt
+          ls -lh chunks
+
+      - uses: actions/upload-artifact@v4
+        with: { name: sdk-part-00, path: chunks/sdk.part-00, compression-level: 0, if-no-files-found: ignore, retention-days: 7 }
+      - uses: actions/upload-artifact@v4
+        with: { name: sdk-part-01, path: chunks/sdk.part-01, compression-level: 0, if-no-files-found: ignore, retention-days: 7 }
+      - uses: actions/upload-artifact@v4
+        with: { name: sdk-part-02, path: chunks/sdk.part-02, compression-level: 0, if-no-files-found: ignore, retention-days: 7 }
+      - uses: actions/upload-artifact@v4
+        with: { name: sdk-part-03, path: chunks/sdk.part-03, compression-level: 0, if-no-files-found: ignore, retention-days: 7 }
+      - uses: actions/upload-artifact@v4
+        with: { name: sdk-part-04, path: chunks/sdk.part-04, compression-level: 0, if-no-files-found: ignore, retention-days: 7 }
+      - uses: actions/upload-artifact@v4
+        with: { name: sdk-part-05, path: chunks/sdk.part-05, compression-level: 0, if-no-files-found: ignore, retention-days: 7 }
+      - uses: actions/upload-artifact@v4
+        with: { name: sdk-part-06, path: chunks/sdk.part-06, compression-level: 0, if-no-files-found: ignore, retention-days: 7 }
+      - uses: actions/upload-artifact@v4
+        with: { name: sdk-part-07, path: chunks/sdk.part-07, compression-level: 0, if-no-files-found: ignore, retention-days: 7 }
+      - uses: actions/upload-artifact@v4
+        with: { name: sdk-part-08, path: chunks/sdk.part-08, compression-level: 0, if-no-files-found: ignore, retention-days: 7 }
+
+      - uses: actions/upload-artifact@v4
+        with: { name: templates-part-00, path: chunks/templates.part-00, compression-level: 0, if-no-files-found: ignore, retention-days: 7 }
+      - uses: actions/upload-artifact@v4
+        with: { name: templates-part-01, path: chunks/templates.part-01, compression-level: 0, if-no-files-found: ignore, retention-days: 7 }
+      - uses: actions/upload-artifact@v4
+        with: { name: templates-part-02, path: chunks/templates.part-02, compression-level: 0, if-no-files-found: ignore, retention-days: 7 }
+      - uses: actions/upload-artifact@v4
+        with: { name: templates-part-03, path: chunks/templates.part-03, compression-level: 0, if-no-files-found: ignore, retention-days: 7 }
+
+      - name: Upload chunk manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: chunk-manifest
+          path: |
+            chunks/chunk-manifest.sha256
+            chunks/chunk-sizes.txt
+          retention-days: 7
