@@ -1,0 +1,229 @@
+name: Prepare Blender 5.2.1 LTS for Sandbox
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prepare-blender:
+    runs-on: ubuntu-24.04
+
+    env:
+      BLENDER_VERSION: "5.2.1"
+      BLENDER_FILE: "blender-5.2.1-linux-x64.tar.xz"
+      BLENDER_BASE_URL: "https://download.blender.org/release/Blender5.2"
+      CHUNK_SIZE: "64M"
+
+    steps:
+      - name: Create working directories
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/parts
+          mkdir -p work/manifest
+
+      - name: Download official Blender
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd work
+
+          curl \
+            --fail \
+            --location \
+            --retry 5 \
+            --retry-delay 3 \
+            --connect-timeout 30 \
+            --output "${BLENDER_FILE}" \
+            "${BLENDER_BASE_URL}/${BLENDER_FILE}"
+
+          curl \
+            --fail \
+            --location \
+            --retry 5 \
+            --retry-delay 3 \
+            --connect-timeout 30 \
+            --output "blender-${BLENDER_VERSION}.sha256" \
+            "${BLENDER_BASE_URL}/blender-${BLENDER_VERSION}.sha256"
+
+          ls -lh "${BLENDER_FILE}"
+
+      - name: Verify official SHA256
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd work
+
+          grep "${BLENDER_FILE}" \
+            "blender-${BLENDER_VERSION}.sha256" \
+            > official-checksum.txt
+
+          sha256sum --check official-checksum.txt
+
+      - name: Test Blender archive
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd work
+
+          xz --test "${BLENDER_FILE}"
+
+          echo "Archive integrity: PASS"
+
+      - name: Split archive into sandbox-safe chunks
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd work
+
+          split \
+            --bytes="${CHUNK_SIZE}" \
+            --numeric-suffixes=0 \
+            --suffix-length=2 \
+            --additional-suffix=.part \
+            "${BLENDER_FILE}" \
+            "parts/${BLENDER_FILE}."
+
+          echo
+          echo "Generated chunks:"
+          ls -lh parts/
+
+      - name: Generate integrity manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd work
+
+          sha256sum "${BLENDER_FILE}" \
+            > manifest/BLENDER_SHA256.txt
+
+          (
+            cd parts
+            sha256sum *.part
+          ) > manifest/PARTS_SHA256.txt
+
+          stat --printf='%s\n' "${BLENDER_FILE}" \
+            > manifest/BLENDER_SIZE.txt
+
+          cat > manifest/README.txt <<EOF
+          Blender ${BLENDER_VERSION} LTS
+          Platform: Linux x64
+
+          Original archive:
+          ${BLENDER_FILE}
+
+          The original official archive was downloaded from:
+          ${BLENDER_BASE_URL}/${BLENDER_FILE}
+
+          The archive was verified against Blender's official SHA256 file.
+
+          Reassembly:
+
+          cat ${BLENDER_FILE}.*.part > ${BLENDER_FILE}
+
+          Then verify:
+
+          sha256sum -c BLENDER_SHA256.txt
+
+          Extract:
+
+          tar -xJf ${BLENDER_FILE}
+
+          Headless test:
+
+          ./blender-${BLENDER_VERSION}-linux-x64/blender \
+            --background \
+            --version
+          EOF
+
+      - name: Verify reconstruction before upload
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd work
+
+          cat parts/"${BLENDER_FILE}".*.part \
+            > reconstructed.tar.xz
+
+          ORIGINAL_SHA="$(sha256sum "${BLENDER_FILE}" | awk '{print $1}')"
+          REBUILT_SHA="$(sha256sum reconstructed.tar.xz | awk '{print $1}')"
+
+          echo "Original:      ${ORIGINAL_SHA}"
+          echo "Reconstructed: ${REBUILT_SHA}"
+
+          test "${ORIGINAL_SHA}" = "${REBUILT_SHA}"
+
+          rm reconstructed.tar.xz
+
+          echo "Reconstruction verification: PASS"
+
+      - name: Upload manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: blender-5.2.1-manifest
+          path: work/manifest/
+          compression-level: 0
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload Blender part 00
+        uses: actions/upload-artifact@v4
+        with:
+          name: blender-5.2.1-part-00
+          path: work/parts/blender-5.2.1-linux-x64.tar.xz.00.part
+          compression-level: 0
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload Blender part 01
+        uses: actions/upload-artifact@v4
+        with:
+          name: blender-5.2.1-part-01
+          path: work/parts/blender-5.2.1-linux-x64.tar.xz.01.part
+          compression-level: 0
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload Blender part 02
+        uses: actions/upload-artifact@v4
+        with:
+          name: blender-5.2.1-part-02
+          path: work/parts/blender-5.2.1-linux-x64.tar.xz.02.part
+          compression-level: 0
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload Blender part 03
+        uses: actions/upload-artifact@v4
+        with:
+          name: blender-5.2.1-part-03
+          path: work/parts/blender-5.2.1-linux-x64.tar.xz.03.part
+          compression-level: 0
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload Blender part 04
+        uses: actions/upload-artifact@v4
+        with:
+          name: blender-5.2.1-part-04
+          path: work/parts/blender-5.2.1-linux-x64.tar.xz.04.part
+          compression-level: 0
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload Blender part 05
+        uses: actions/upload-artifact@v4
+        with:
+          name: blender-5.2.1-part-05
+          path: work/parts/blender-5.2.1-linux-x64.tar.xz.05.part
+          compression-level: 0
+          retention-days: 30
+          if-no-files-found: error
