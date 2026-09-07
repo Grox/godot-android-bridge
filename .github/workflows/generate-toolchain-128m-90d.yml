@@ -1,0 +1,495 @@
+name: Generate Godot Android Toolchain 128M - 90D
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android command line tools
+        uses: android-actions/setup-android@v4
+
+      - name: Install pinned Android SDK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager \
+            "cmdline-tools;23.0" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.1" \
+            "cmake;3.10.2.4988404" \
+            "ndk;28.1.13356709"
+          sdkmanager --list_installed > toolchain-manifest.txt
+          grep -E '^  cmdline-tools;23\.0[[:space:]]+\| 23\.0[[:space:]]+\|' toolchain-manifest.txt
+          grep -E '^  platform-tools[[:space:]]+\| 37\.0\.1[[:space:]]+\|' toolchain-manifest.txt
+          grep -E '^  platforms;android-35[[:space:]]+\| 2[[:space:]]+\|' toolchain-manifest.txt
+          grep -E '^  build-tools;35\.0\.1[[:space:]]+\| 35\.0\.1[[:space:]]+\|' toolchain-manifest.txt
+          grep -E '^  cmake;3\.10\.2\.4988404[[:space:]]+\| 3\.10\.2[[:space:]]+\|' toolchain-manifest.txt
+          grep -E '^  ndk;28\.1\.13356709[[:space:]]+\| 28\.1\.13356709[[:space:]]+\|' toolchain-manifest.txt
+          rm -rf "$ANDROID_HOME/cmdline-tools/latest"
+          mv "$ANDROID_HOME/cmdline-tools/23.0" "$ANDROID_HOME/cmdline-tools/latest"
+
+      - name: Package deterministic Android SDK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          tar \
+            --sort=name \
+            --mtime='UTC 2026-09-05 00:00:00' \
+            --owner=0 --group=0 --numeric-owner \
+            --format=gnu \
+            -C "$ANDROID_HOME" -cf android-sdk-godot.tar \
+            cmdline-tools/latest \
+            platform-tools \
+            platforms/android-35 \
+            build-tools/35.0.1 \
+            cmake/3.10.2.4988404 \
+            ndk/28.1.13356709 \
+            licenses
+          sha256sum android-sdk-godot.tar >> toolchain-manifest.txt
+          wc -c android-sdk-godot.tar >> toolchain-manifest.txt
+
+      - name: Download and verify Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -L --fail --retry 3 -o Godot_v4.7.2-stable_linux.x86_64.zip https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          echo "cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4  Godot_v4.7.2-stable_linux.x86_64.zip" | sha256sum -c -
+
+      - name: Download and verify Godot 4.7.2 export templates
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -L --fail --retry 3 -o Godot_v4.7.2-stable_export_templates.tpz https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz
+          echo "f298490b8d44d934be425a5a65a51bf15f422428b229a06a6e11d9ffea248011  Godot_v4.7.2-stable_export_templates.tpz" | sha256sum -c -
+
+      - name: Split payload into 128M chunks
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p chunks
+          split -b 128M -d -a 2 android-sdk-godot.tar chunks/sdk.part-
+          split -b 128M -d -a 2 Godot_v4.7.2-stable_export_templates.tpz chunks/templates.part-
+          sha256sum android-sdk-godot.tar Godot_v4.7.2-stable_export_templates.tpz chunks/* > chunks/chunk-manifest.sha256
+          wc -c android-sdk-godot.tar Godot_v4.7.2-stable_export_templates.tpz chunks/* > chunks/chunk-sizes.txt
+
+      - name: Upload Godot
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-4.7.2-linux
+          path: Godot_v4.7.2-stable_linux.x86_64.zip
+          compression-level: 0
+          retention-days: 90
+
+      - name: Upload toolchain manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: toolchain-manifest
+          path: toolchain-manifest.txt
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-00
+          path: chunks/sdk.part-00
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-01
+          path: chunks/sdk.part-01
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-02
+          path: chunks/sdk.part-02
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-03
+          path: chunks/sdk.part-03
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-04
+          path: chunks/sdk.part-04
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-05
+          path: chunks/sdk.part-05
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-06
+          path: chunks/sdk.part-06
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-07
+          path: chunks/sdk.part-07
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-08
+          path: chunks/sdk.part-08
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-09
+          path: chunks/sdk.part-09
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-10
+          path: chunks/sdk.part-10
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-11
+          path: chunks/sdk.part-11
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-12
+          path: chunks/sdk.part-12
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-13
+          path: chunks/sdk.part-13
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-14
+          path: chunks/sdk.part-14
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-15
+          path: chunks/sdk.part-15
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-16
+          path: chunks/sdk.part-16
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-17
+          path: chunks/sdk.part-17
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-18
+          path: chunks/sdk.part-18
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-19
+          path: chunks/sdk.part-19
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-20
+          path: chunks/sdk.part-20
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-21
+          path: chunks/sdk.part-21
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-22
+          path: chunks/sdk.part-22
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-23
+          path: chunks/sdk.part-23
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-24
+          path: chunks/sdk.part-24
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-25
+          path: chunks/sdk.part-25
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-26
+          path: chunks/sdk.part-26
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-27
+          path: chunks/sdk.part-27
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-28
+          path: chunks/sdk.part-28
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-29
+          path: chunks/sdk.part-29
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-30
+          path: chunks/sdk.part-30
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-part-31
+          path: chunks/sdk.part-31
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: templates-part-00
+          path: chunks/templates.part-00
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: templates-part-01
+          path: chunks/templates.part-01
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: templates-part-02
+          path: chunks/templates.part-02
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: templates-part-03
+          path: chunks/templates.part-03
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: templates-part-04
+          path: chunks/templates.part-04
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: templates-part-05
+          path: chunks/templates.part-05
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: templates-part-06
+          path: chunks/templates.part-06
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: templates-part-07
+          path: chunks/templates.part-07
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: templates-part-08
+          path: chunks/templates.part-08
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: templates-part-09
+          path: chunks/templates.part-09
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: templates-part-10
+          path: chunks/templates.part-10
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: templates-part-11
+          path: chunks/templates.part-11
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: templates-part-12
+          path: chunks/templates.part-12
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: templates-part-13
+          path: chunks/templates.part-13
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: templates-part-14
+          path: chunks/templates.part-14
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: templates-part-15
+          path: chunks/templates.part-15
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - name: Upload chunk manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: chunk-manifest
+          path: |
+            chunks/chunk-manifest.sha256
+            chunks/chunk-sizes.txt
+          retention-days: 90
