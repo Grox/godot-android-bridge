@@ -1,0 +1,58 @@
+name: Package 7zip Linux
+
+on:
+  workflow_dispatch:
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download official 7-Zip 26.03
+        run: |
+          curl -L \
+            "https://github.com/ip7z/7zip/releases/download/26.03/7z2603-linux-x64.tar.xz" \
+            -o 7zip.tar.xz
+
+      - name: Verify SHA-256
+        run: |
+          echo "dc99eff5008f1ab79bd7084c68513701547a808a89502bf4133683535ab3c695  7zip.tar.xz" \
+            | sha256sum -c -
+
+      - name: Extract
+        run: |
+          mkdir -p package
+          tar -xJf 7zip.tar.xz -C package
+          chmod +x package/7zz
+
+      - name: Verify binary
+        run: |
+          ./package/7zz | head -20
+          ./package/7zz i
+
+      - name: Add installer helper
+        run: |
+          cat > package/INSTALL_SANDBOX.sh <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          ROOT="$(cd "$(dirname "$0")" && pwd)"
+          chmod +x "$ROOT/7zz"
+
+          echo "7-Zip:"
+          "$ROOT/7zz" | head -4
+
+          echo
+          echo "Use:"
+          echo "  $ROOT/7zz x archivo.rar -oDESTINO"
+          EOF
+
+          chmod +x package/INSTALL_SANDBOX.sh
+
+      - name: Upload 7-Zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 7zip-linux-x64-26.03
+          path: package/
+          compression-level: 0
+          retention-days: 30
