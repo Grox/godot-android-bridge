@@ -1,0 +1,60 @@
+name: Fetch Godot 4.7.2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fetch-godot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Download Godot 4.7.2
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          FILE="Godot_v4.7.2-stable_linux.x86_64.zip"
+          URL="https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/${FILE}"
+
+          curl \
+            --fail \
+            --location \
+            --retry 3 \
+            --retry-delay 2 \
+            --output "${FILE}" \
+            "${URL}"
+
+          test -s "${FILE}"
+
+      - name: Verify SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          FILE="Godot_v4.7.2-stable_linux.x86_64.zip"
+          EXPECTED="cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4"
+
+          ACTUAL="$(sha256sum "${FILE}" | awk '{print $1}')"
+
+          echo "Expected: ${EXPECTED}"
+          echo "Actual:   ${ACTUAL}"
+
+          if [ "${ACTUAL}" != "${EXPECTED}" ]; then
+            echo "SHA-256 mismatch"
+            exit 1
+          fi
+
+          echo "SHA-256 OK"
+
+      - name: Upload Godot as Actions artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-4.7.2-linux-x86_64
+          path: Godot_v4.7.2-stable_linux.x86_64.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
